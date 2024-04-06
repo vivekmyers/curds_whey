@@ -1,0 +1,12 @@
+name:
+  curds
+channels:
+  - conda-forge
+dependencies:
+  - pip=24.0
+  - numpy=1.26
+  - scikit-learn=1.4
+  - matplotlib=3.8
+  - jax=0.4.25
+  - seaborn
+  - tqdm
