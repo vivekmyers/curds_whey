@@ -38,7 +38,7 @@ def curds_nocv(X, Y, Xt):
     D = jnp.diag(dscale)
 
     c_beta = jnp.linalg.pinv(X.T @ X) @ X.T @ Y @ Ty
-    beta_scaled = c_beta @ D @ jnp.linalg.pinv(Ty)
+    beta_scaled = c_beta @ D @ Ty.T
 
     return rY(fX(Xt) @ beta_scaled)
 
@@ -61,7 +61,7 @@ def curds_gcv(X, Y, Xt):
     dscale = jnp.maximum(dscale, 0)
     D = jnp.diag(dscale)
     c_beta = jnp.linalg.pinv(X.T @ X) @ X.T @ Yc
-    beta_scaled = c_beta @ D @ jnp.linalg.pinv(Ty)
+    beta_scaled = c_beta @ D @ Ty.T
 
     return rY(fX(Xt) @ beta_scaled)
 
