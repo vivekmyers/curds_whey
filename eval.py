@@ -40,17 +40,19 @@ def evaluate(key, model, n=100, p=10, q=15, trials=1000, rho=0.1, eps=0.1, **kwa
 def ablate_param(key, name, vals, title=None):
     plt.figure(figsize=(7, 4))
     plt.style.use("ggplot")
-    plt.rc("text", usetex=True)
+    # plt.rc("text", usetex=True)
     results = collections.defaultdict(list)
 
     for val in tqdm.tqdm(vals):
         results["Curds"].append(evaluate(key, models.curds_nocv, **{name: val}))
-        results["Curds GCV"].append(evaluate(key, models.curds_gcv, **{name: val}))
+        # results["Curds GCV"].append(evaluate(key, models.curds_gcv, **{name: val}))
+        results["Curds cca_full"].append(evaluate(key, models.curds_nocv_cca_full, **{name: val}))
+        results["Curds cca"].append(evaluate(key, models.curds_nocv_pinv, **{name: val}))
         results["OLS"].append(evaluate(key, models.ols, **{name: val}))
-        results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **{name: val}))
-        results["Ridge 1"].append(evaluate(key, models.ridge, lam=1.0, **{name: val}))
-        results["Ridge 10"].append(evaluate(key, models.ridge, lam=10, **{name: val}))
-        results["Ridge 100"].append(evaluate(key, models.ridge, lam=100, **{name: val}))
+        # results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **{name: val}))
+        # results["Ridge 1"].append(evaluate(key, models.ridge, lam=1.0, **{name: val}))
+        # results["Ridge 10"].append(evaluate(key, models.ridge, lam=10, **{name: val}))
+        # results["Ridge 100"].append(evaluate(key, models.ridge, lam=100, **{name: val}))
         results["Ridge 200"].append(evaluate(key, models.ridge, lam=100, **{name: val}))
 
     for k, data in results.items():
@@ -67,9 +69,10 @@ def ablate_param(key, name, vals, title=None):
 
 key = jax.random.key(0)
 
-ablate_param(key, "n", [25, 50, 100, 150, 200], title="Ablation of dataset size")
-ablate_param(key, "p", [5, 10, 20, 40, 80], title="Ablation of input dimension")
-ablate_param(key, "q", [5, 10, 20, 40, 80], title="Ablation of output dimension")
-ablate_param(key, "rho", [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9], title="Ablation of parameter correlations")
-ablate_param(key, "eps", [0.01, 0.1, 0.3, 0.6, 1.0], title="Ablation of noise level")
+ablate_param(key, "n", [25], title="Ablation of dataset size")
+# ablate_param(key, "n", [25, 50, 100, 150, 200], title="Ablation of dataset size")
+# ablate_param(key, "p", [5, 10, 20, 40, 80], title="Ablation of input dimension")
+# ablate_param(key, "q", [5, 10, 20, 40, 80], title="Ablation of output dimension")
+# ablate_param(key, "rho", [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9], title="Ablation of parameter correlations")
+# ablate_param(key, "eps", [0.01, 0.1, 0.3, 0.6, 1.0], title="Ablation of noise level")
 
