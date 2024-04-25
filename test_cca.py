@@ -47,8 +47,8 @@ def cca_full(X, Y):
 
 def eig_Q(X, Y):
     Q = jnp.linalg.inv(Y.T @ Y) @ Y.T @ X @ jnp.linalg.inv(X.T @ X) @ X.T @ Y
-    c2, T = jnp.linalg.eig(Q)
-    return T, c2
+    cc, T = jnp.linalg.eig(Q)
+    return T, cc
 
 n = 5
 p = 2
@@ -74,3 +74,17 @@ print(T2)
 print(T)
 
 print(T2.T @ Y.T @ Y @ T2)
+
+# NOTE:
+# experiment to show that we should use full cca
+# in beta calculation, we have T @ D @ T^{-1}
+# here we compare the two ways of calculation
+
+# res1 = res2 when q <= p
+# res1 != res2 when q > p
+
+res1 = T1 @ jnp.diag(c1) @ jnp.linalg.pinv(T1)
+res2 = T2 @ jnp.diag(c2) @ jnp.linalg.inv(T2)
+
+print("res1: {}".format(res1))
+print("res2: {}".format(res2))
