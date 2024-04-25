@@ -51,9 +51,11 @@ def ablate_param(key, name, vals, title=None):
     results = collections.defaultdict(list)
 
     for val in tqdm.tqdm(vals):
-        results["Curds Full"].append(evaluate(key, models.curds_nocv_cca_full, **{name: val}))
-        results["Curds Eig"].append(evaluate(key, models.curds_nocv_cca_eig, **{name: val}))
-        results["Curds GCV"].append(evaluate(key, models.curds_gcv_cca_full, **{name: val}))
+        # results["Curds"].append(evaluate(key, models.curds_nocv, **{name: val}))
+        # results["Curds GCV"].append(evaluate(key, models.curds_gcv, **{name: val}))
+        results["Curds cca_full"].append(evaluate(key, models.curds_nocv_cca_full, **{name: val}))
+        results["Curds cca_eig"].append(evaluate(key, models.curds_nocv_cca_eig, **{name: val}))
+        # results["Curds cca"].append(evaluate(key, models.curds_nocv_pinv, **{name: val}))
         results["OLS"].append(evaluate(key, models.ols, **{name: val}))
         results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **{name: val}))
         results["Ridge 1"].append(evaluate(key, models.ridge, lam=1.0, **{name: val}))
