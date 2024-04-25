@@ -22,6 +22,8 @@ def sample_beta(key, p, q, rho):
             jax.random.uniform(rng2, (1, 1)) + jax.random.uniform(rng3, (p, 1))
         ) / 2
         return beta
+    elif args.beta == "constant":
+        return jnp.ones((p, q))
 
 
 @functools.partial(jax.jit, static_argnames=["n", "p", "q"])
@@ -89,7 +91,7 @@ def ablate_param(key, name, vals, title=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--param", type=str, default="n")
-    parser.add_argument("--beta", type=str, choices=["gaussian", "uniform"], default="gaussian")
+    parser.add_argument("--beta", type=str, choices=["gaussian", "uniform", "constant"], default="gaussian")
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
     key = jax.random.key(args.seed)
