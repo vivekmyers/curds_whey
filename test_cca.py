@@ -1,14 +1,5 @@
-import jax
-import jax.numpy as jnp
+import numpy as jnp
 
-def normalize(X):
-    mu, sigma = X.mean(axis=0), X.std(axis=0)
-    forward = lambda x: (x - mu) / sigma
-    reverse = lambda x: x * sigma + mu
-    return forward(X), forward, reverse
-
-# http://numerical.recipes/whp/notes/CanonCorrBySVD.pdf
-@jax.jit
 def cca(X, Y):
     n, p, q = X.shape[0], X.shape[1], Y.shape[1]
     comp = min(p, q)
@@ -27,8 +18,6 @@ def cca(X, Y):
 
     return Tx, Ty, c
 
-# http://numerical.recipes/whp/notes/CanonCorrBySVD.pdf
-@jax.jit
 def cca_full(X, Y):
     n, p, q = X.shape[0], X.shape[1], Y.shape[1]
     assert X.shape == (n, p)
@@ -45,7 +34,8 @@ def cca_full(X, Y):
 
     # NOTE: extend c to length q
     c = jnp.zeros((q, ))
-    c = c.at[:comp].set(S)
+    # c = c.at[:comp].set(S)
+    c[:comp] = S
 
     # print("Rx: {} | U: {} | Ry: {} | V: {}".format(Rx.shape, U.shape, Ry.shape, V.shape))
 
@@ -54,3 +44,33 @@ def cca_full(X, Y):
     Ty = jnp.linalg.inv(Ry) @ V
 
     return Tx, Ty, c
+
+def eig_Q(X, Y):
+    Q = jnp.linalg.inv(Y.T @ Y) @ Y.T @ X @ jnp.linalg.inv(X.T @ X) @ X.T @ Y
+    c2, T = jnp.linalg.eig(Q)
+    return T, c2
+
+n = 5
+p = 2
+q = 3
+X = jnp.random.normal(size=(n, p))
+b = jnp.random.normal(size=(p, q))
+Y = X @ b + jnp.random.normal(size=(n, q))
+
+_, T1, c1 = cca(X, Y)
+_, T2, c2 = cca_full(X, Y)
+T, cc = eig_Q(X, Y)
+
+
+# NOTE:
+# Conclusion is that CCA implementation is correct!
+
+print(c1**2)
+print(cc)
+
+print(T1)
+print(T2)
+# T is normalized to one
+print(T)
+
+print(T2.T @ Y.T @ Y @ T2)

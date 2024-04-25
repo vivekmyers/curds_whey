@@ -11,9 +11,15 @@ import collections
 def gen_data(key, n, p, q, rho, eps):
     rng1, rng2, rng3, rng4, rng5 = jax.random.split(key, 5)
     X = jax.random.normal(rng1, (n, p))
-    beta = (1 - rho) * jax.random.normal(rng2, (p, q)) + rho * (
-        jax.random.normal(rng3, (1, 1)) + jax.random.normal(rng4, (p, 1))
-    ) / 2
+    # beta = (1 - rho) * jax.random.normal(rng2, (p, q)) + rho * (
+    #     jax.random.normal(rng3, (1, 1)) + jax.random.normal(rng4, (p, 1))
+    # ) / 2
+
+    # seed = 42
+    # key = jax.random.PRNGKey(seed)
+    # beta = jax.random.normal(key, (p, q))
+    beta = jnp.ones((p, q))
+
     noise = jax.random.normal(rng5, (n, q))
     Y = X @ beta + eps * noise
     return X, Y
@@ -44,16 +50,16 @@ def ablate_param(key, name, vals, title=None):
     results = collections.defaultdict(list)
 
     for val in tqdm.tqdm(vals):
-        results["Curds"].append(evaluate(key, models.curds_nocv, **{name: val}))
+        # results["Curds"].append(evaluate(key, models.curds_nocv, **{name: val}))
         # results["Curds GCV"].append(evaluate(key, models.curds_gcv, **{name: val}))
         results["Curds cca_full"].append(evaluate(key, models.curds_nocv_cca_full, **{name: val}))
-        results["Curds cca"].append(evaluate(key, models.curds_nocv_pinv, **{name: val}))
+        # results["Curds cca"].append(evaluate(key, models.curds_nocv_pinv, **{name: val}))
         results["OLS"].append(evaluate(key, models.ols, **{name: val}))
-        # results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **{name: val}))
-        # results["Ridge 1"].append(evaluate(key, models.ridge, lam=1.0, **{name: val}))
+        results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **{name: val}))
+        results["Ridge 0.01"].append(evaluate(key, models.ridge, lam=0.01, **{name: val}))
         # results["Ridge 10"].append(evaluate(key, models.ridge, lam=10, **{name: val}))
         # results["Ridge 100"].append(evaluate(key, models.ridge, lam=100, **{name: val}))
-        results["Ridge 200"].append(evaluate(key, models.ridge, lam=100, **{name: val}))
+        # results["Ridge 200"].append(evaluate(key, models.ridge, lam=100, **{name: val}))
 
     for k, data in results.items():
         mean, stderr = zip(*data)
@@ -69,7 +75,7 @@ def ablate_param(key, name, vals, title=None):
 
 key = jax.random.key(0)
 
-ablate_param(key, "n", [25], title="Ablation of dataset size")
+ablate_param(key, "n", [25, 50, 100, 150, 200], title="Ablation of dataset size")
 # ablate_param(key, "n", [25, 50, 100, 150, 200], title="Ablation of dataset size")
 # ablate_param(key, "p", [5, 10, 20, 40, 80], title="Ablation of input dimension")
 # ablate_param(key, "q", [5, 10, 20, 40, 80], title="Ablation of output dimension")
