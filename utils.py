@@ -54,3 +54,13 @@ def cca_full(X, Y):
     Ty = jnp.linalg.inv(Ry) @ V
 
     return Tx, Ty, c
+
+@jax.jit
+def cca_eig(X, Y):
+    Q = jnp.linalg.pinv(Y.T @ Y) @ Y.T @ X @ jnp.linalg.pinv(X.T @ X) @ X.T @ Y
+    c2, T = jnp.linalg.eig(Q)
+
+    c2 = jnp.real(c2)
+    T = jnp.real(T)
+
+    return T, c2
