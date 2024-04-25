@@ -7,23 +7,30 @@ import matplotlib.pyplot as plt
 import collections
 
 
-@functools.partial(jax.jit, static_argnames=["n", "p", "q"])
-def gen_data(key, n, p, q, rho, eps):
-    rng1, rng2, rng3, rng4, rng5 = jax.random.split(key, 5)
-    X = jax.random.normal(rng1, (n, p))
-    beta = (1 - rho) * jax.random.normal(rng2, (p, q)) + rho * (
-        jax.random.normal(rng3, (1, 1)) + jax.random.normal(rng4, (p, 1))
+@functools.partial(jax.jit, static_argnames=["p", "q"])
+def sample_beta(key, p, q, rho):
+    rng1, rng2, rng3 = jax.random.split(key, 3)
+    beta = (1 - rho) * jax.random.normal(rng1, (p, q)) + rho * (
+        jax.random.normal(rng2, (1, 1)) + jax.random.normal(rng3, (p, 1))
     ) / 2
-    noise = jax.random.normal(rng5, (n, q))
+    return beta
+
+
+@functools.partial(jax.jit, static_argnames=["n", "p", "q"])
+def gen_data(key, n, p, q, beta, eps):
+    rng1, rng2 = jax.random.split(key, 2)
+    X = jax.random.normal(rng1, (n, p))
+    noise = jax.random.normal(rng2, (n, q))
     Y = X @ beta + eps * noise
     return X, Y
 
 
 @functools.partial(jax.jit, static_argnames=["model", "n", "p", "q"])
 def eval_trial(key, model, n, p, q, rho, eps, **kwargs):
-    rng1, rng2 = jax.random.split(key)
-    X, Y = gen_data(rng1, n, p, q, rho, eps)
-    Xt, Yt = gen_data(rng2, n, p, q, rho, eps)
+    rng1, rng2, rng3 = jax.random.split(key, 3)
+    beta = sample_beta(rng1, p, q, rho)
+    X, Y = gen_data(rng2, n, p, q, beta, eps)
+    Xt, Yt = gen_data(rng3, n, p, q, beta, eps)
     Yhat = model(X, Y, Xt, **kwargs)
     return jnp.mean((Yt - Yhat) ** 2)
 
