@@ -5,15 +5,23 @@ import tqdm
 import functools
 import matplotlib.pyplot as plt
 import collections
+import argparse
 
 
 @functools.partial(jax.jit, static_argnames=["p", "q"])
 def sample_beta(key, p, q, rho):
-    rng1, rng2, rng3 = jax.random.split(key, 3)
-    beta = (1 - rho) * jax.random.normal(rng1, (p, q)) + rho * (
-        jax.random.normal(rng2, (1, 1)) + jax.random.normal(rng3, (p, 1))
-    ) / 2
-    return beta
+    if args.beta == "gaussian":
+        rng1, rng2, rng3 = jax.random.split(key, 3)
+        beta = (1 - rho) * jax.random.normal(rng1, (p, q)) + rho * (
+            jax.random.normal(rng2, (1, 1)) + jax.random.normal(rng3, (p, 1))
+        ) / 2
+        return beta
+    elif args.beta == "uniform":
+        rng1, rng2, rng3 = jax.random.split(key, 3)
+        beta = (1 - rho) * jax.random.uniform(rng1, (p, q)) + rho * (
+            jax.random.uniform(rng2, (1, 1)) + jax.random.uniform(rng3, (p, 1))
+        ) / 2
+        return beta
 
 
 @functools.partial(jax.jit, static_argnames=["n", "p", "q"])
@@ -48,19 +56,21 @@ def ablate_param(key, name, vals, title=None):
     plt.figure(figsize=(7, 4))
     plt.style.use("ggplot")
     plt.rc("text", usetex=True)
+    plt.rc("font", family="serif")
     results = collections.defaultdict(list)
 
     for val in tqdm.tqdm(vals):
         # results["Curds"].append(evaluate(key, models.curds_nocv, **{name: val}))
         # results["Curds GCV"].append(evaluate(key, models.curds_gcv, **{name: val}))
-        results["Curds cca_full"].append(evaluate(key, models.curds_nocv_cca_full, **{name: val}))
-        results["Curds cca_eig"].append(evaluate(key, models.curds_nocv_cca_eig, **{name: val}))
-        # results["Curds cca"].append(evaluate(key, models.curds_nocv_pinv, **{name: val}))
-        results["OLS"].append(evaluate(key, models.ols, **{name: val}))
+        results["Ridge 0.001"].append(evaluate(key, models.ridge, lam=0.001, **{name: val}))
+        results["Ridge 0.01"].append(evaluate(key, models.ridge, lam=0.01, **{name: val}))
         results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **{name: val}))
-        results["Ridge 1"].append(evaluate(key, models.ridge, lam=1.0, **{name: val}))
-        results["Ridge 10"].append(evaluate(key, models.ridge, lam=10, **{name: val}))
-        results["Ridge 100"].append(evaluate(key, models.ridge, lam=100, **{name: val}))
+        # results["Ridge 10"].append(evaluate(key, models.ridge, lam=10, **{name: val}))
+        results["OLS"].append(evaluate(key, models.ols, **{name: val}))
+        results["Curds cca_full"].append(evaluate(key, models.curds_nocv_cca_full, **{name: val}))
+        # results["Curds cca_eig"].append(evaluate(key, models.curds_nocv_cca_eig, **{name: val}))
+        results["Curds gcv"].append(evaluate(key, models.curds_gcv_cca_full, **{name: val}))
+        # results["Curds cca"].append(evaluate(key, models.curds_nocv_pinv, **{name: val}))
 
     for k, data in results.items():
         mean, stderr = zip(*data)
@@ -70,15 +80,28 @@ def ablate_param(key, name, vals, title=None):
     plt.xlabel(name)
     plt.ylabel("MSE")
     plt.legend()
-    plt.title(title or f"Ablate {name}")
-    plt.savefig(f"ablation_{name}.png", dpi=300)
+    title = title or f"Ablate {name}"
+    title += f" ({args.beta} model)"
+    plt.title(title)
+    plt.savefig(f"ablation_{name}_{args.beta}.png", dpi=300)
 
 
-key = jax.random.key(0)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--param", type=str, default="n")
+    parser.add_argument("--beta", type=str, choices=["gaussian", "uniform"], default="gaussian")
+    parser.add_argument('--seed', type=int, default=0)
+    args = parser.parse_args()
+    key = jax.random.key(args.seed)
 
-ablate_param(key, "n", [25, 50, 100, 150, 200], title="Ablation of dataset size")
-ablate_param(key, "p", [5, 10, 20, 40, 80], title="Ablation of input dimension")
-ablate_param(key, "q", [5, 10, 20, 40, 80], title="Ablation of output dimension")
-ablate_param(key, "rho", [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9], title="Ablation of parameter correlations")
-ablate_param(key, "eps", [0.01, 0.1, 0.3, 0.6, 1.0], title="Ablation of noise level")
+    if args.param == "n":
+        ablate_param(key, "n", [25, 50, 100, 150, 200], title="Ablation of dataset size")
+    if args.param == "p":
+        ablate_param(key, "p", [5, 10, 20, 40, 80], title="Ablation of input dimension")
+    if args.param == "q":
+        ablate_param(key, "q", [5, 10, 20, 40, 80], title="Ablation of output dimension")
+    if args.param == "rho":
+        ablate_param(key, "rho", [0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9], title="Ablation of parameter correlations")
+    if args.param == "eps":
+        ablate_param(key, "eps", [0.01, 0.1, 0.3, 0.6, 1.0], title="Ablation of noise level")
 
