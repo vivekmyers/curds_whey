@@ -1,6 +1,6 @@
 params = eps n p q rho
 
-all: $(foreach param, $(params), ablation_$(param)_uniform.png ablation_$(param)_gaussian.png)
+all: $(foreach param, $(params), ablation_$(param)_uniform.png ablation_$(param)_gaussian.png ablation_$(param)_constant.png)
 
 uniform: $(foreach param, $(params), ablation_$(param)_uniform.png)
 
