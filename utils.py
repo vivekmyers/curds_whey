@@ -37,21 +37,25 @@ def cca_full(X, Y):
     Qx, Rx = jnp.linalg.qr(X)
     Qy, Ry = jnp.linalg.qr(Y)
 
-    comp = min(p, q)
+    comp = min(n, p, q)
     U, S, V = jnp.linalg.svd(Qx.T @ Qy)
     V = V.T
 
     # print("U: {} | S: {} | V: {}".format(U.shape, S.shape, V.shape))
 
     # NOTE: extend c to length q
-    c = jnp.zeros((q, ))
+    c = jnp.zeros((q,))
     c = c.at[:comp].set(S)
 
     # print("Rx: {} | U: {} | Ry: {} | V: {}".format(Rx.shape, U.shape, Ry.shape, V.shape))
 
     # NOTE: now Ty is an invertible qxq matrix
-    Tx = jnp.linalg.inv(Rx) @ U
-    Ty = jnp.linalg.inv(Ry) @ V
+    Tx = jnp.linalg.pinv(Rx) @ U
+    Ty = jnp.linalg.pinv(Ry) @ V
+    if n < q:
+        Ty = jnp.concatenate([Ty, jnp.zeros((q, q - n))], axis=1)
+    if n < p:
+        Tx = jnp.concatenate([Tx, jnp.zeros((p, p - n))], axis=1)
 
     return Tx, Ty, c
 
