@@ -4,7 +4,11 @@ import utils
 
 @jax.jit
 def ols(X, Y, Xt):
-    beta = jnp.linalg.inv(X.T @ X) @ X.T @ Y
+    n, p, q = X.shape[0], X.shape[1], Y.shape[1]
+    if n >= p:
+        beta = jnp.linalg.inv(X.T @ X) @ X.T @ Y
+    else:
+        beta = X.T @ jnp.linalg.inv(X @ X.T) @ Y
     return Xt @ beta
 
 

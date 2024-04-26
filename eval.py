@@ -6,6 +6,7 @@ import functools
 import matplotlib.pyplot as plt
 import collections
 import argparse
+import re
 
 
 @functools.partial(jax.jit, static_argnames=["p", "q"])
@@ -13,7 +14,7 @@ def sample_beta(key, p, q, rho):
     rng1, rng2, rng3, rng4 = jax.random.split(key, 4)
     beta = (
         args.beta_noise * jax.random.normal(rng1, (p, q))
-        + jax.random.normal(rng2, (1, q)) 
+        + jax.random.normal(rng2, (1, q))
         + jax.random.normal(rng3, (1, 1))
         + jax.random.normal(rng4, (p, 1))
     )
@@ -69,9 +70,9 @@ def evaluate(key, model, n, p, q, trials, rho, eps, fixed, **kwargs):
         X_fixed, _ = gen_data(rng2, n, p, q, rho, beta_fixed, eps)
         kwargs["X_fixed"] = X_fixed
 
-    results = jax.vmap(lambda x: eval_trial(x, model, n, p, q, rho, eps, fixed, **kwargs))(
-        jax.random.split(key, trials)
-    )
+    results = jax.vmap(
+        lambda x: eval_trial(x, model, n, p, q, rho, eps, fixed, **kwargs)
+    )(jax.random.split(key, trials))
     stderr = jnp.std(results) / jnp.sqrt(trials)
     return jnp.mean(results), stderr
 
@@ -82,17 +83,18 @@ def ablate_param(key, name, vals, title=None):
     plt.rc("text", usetex=True)
     plt.rc("font", family="serif")
     results = collections.defaultdict(list)
+    config = {
+        "n": args.n,
+        "p": args.p,
+        "q": args.q,
+        "trials": args.trials,
+        "rho": args.rho,
+        "eps": args.eps,
+        "fixed": args.fixed,
+    }
 
     for val in tqdm.tqdm(vals):
-        kwargs = {
-            "n": args.n,
-            "p": args.p,
-            "q": args.q,
-            "trials": args.trials,
-            "rho": args.rho,
-            "eps": args.eps,
-            "fixed": args.fixed,
-        }
+        kwargs = config.copy()
         kwargs[name] = val
 
         # results["Ridge"].append(evaluate(key, models.ridge, **kwargs))
@@ -102,14 +104,18 @@ def ablate_param(key, name, vals, title=None):
         # results["Ridge 1.0"].append(evaluate(key, models.ridge, lam=1.0, **kwargs))
         # results["Ridge 10"].append(evaluate(key, models.ridge, lam=10, **kwargs))
 
-        # results["OLS"].append(evaluate(key, models.ols, **kwargs))
+        results["OLS"].append(evaluate(key, models.ols, **kwargs))
 
         # results["Curds cca_full"].append(evaluate(key, models.curds_nocv_cca_full, **kwargs))
         # results["Curds cca_eig"].append(evaluate(key, models.curds_nocv_cca_eig, **kwargs))
         # results["Curds gcv"].append(evaluate(key, models.curds_gcv_cca_full, **kwargs))
         # results["Curds cca_eig"].append(evaluate(key, models.curds_nocv_cca_eig, **kwargs))
-        results["Curds cca_full no norm"].append(evaluate(key, models.curds_nocv_cca_full_nonorm, **kwargs))
-        results["Curds gcv no norm"].append(evaluate(key, models.curds_gcv_cca_full_nonorm, **kwargs))
+        results["Curds cca_full no norm"].append(
+            evaluate(key, models.curds_nocv_cca_full_nonorm, **kwargs)
+        )
+        results["Curds gcv no norm"].append(
+            evaluate(key, models.curds_gcv_cca_full_nonorm, **kwargs)
+        )
 
     for k, data in results.items():
         mean, stderr = zip(*data)
@@ -118,15 +124,20 @@ def ablate_param(key, name, vals, title=None):
             vals, mean, yerr=stderr, capsize=5, fmt="o", color=p[0].get_color()
         )
 
+    plt.yscale("log")
     plt.xlabel(name)
     plt.ylabel("MSE")
     plt.legend()
     title = title or f"Ablate {name}"
+    title += f" $(\\epsilon={args.eps},n={args.n},p={args.p},q={args.q},\\rho={args.rho})$"
+    title = re.sub(f"{name}=[^,]+,", "", title)
     # title += f" ({args.beta} model)"
     plt.title(title)
     target = f"ablation_{name}"
     if args.fixed:
         target += "_fixed"
+    if args.suffix:
+        target += f"_{args.suffix}"
     plt.savefig(f"{target}.png", dpi=300)
 
 
@@ -135,26 +146,37 @@ if __name__ == "__main__":
     parser.add_argument("--sweep", type=str, default="n")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--fixed", action="store_true")
-    parser.add_argument("--n", type=int, default=25)
+    parser.add_argument("--n", type=int, default=20)
     parser.add_argument("--p", type=int, default=10)
     parser.add_argument("--q", type=int, default=20)
     parser.add_argument("--trials", type=int, default=500)
     parser.add_argument("--rho", type=float, default=0.3)
-    parser.add_argument("--eps", type=float, default=1.0)
+    parser.add_argument("--eps", type=float, default=5.0)
     # parser.add_argument('--shift', type=float, default=5.0)
-    parser.add_argument('--beta_noise', type=float, default=0.2)
+    parser.add_argument("--beta_noise", type=float, default=0.2)
+    parser.add_argument('--suffix', type=str, default=None)
     args = parser.parse_args()
     key = jax.random.key(args.seed)
 
     # ablate_param(key, "lam", [0.] + list(jnp.exp(jnp.linspace(-5, 0, 100))), title="Ablation of lambda")
     if args.sweep == "n":
         ablate_param(
-            key, "n", [5, 10, 15, 20, 25, 50, 100, 150, 200], title="Ablation of dataset size"
+            key,
+            "n",
+            [5, 10, 15, 20, 25, 50, 100, 150, 200],
+            title="Ablation of dataset size",
         )
     if args.sweep == "p":
-        ablate_param(key, "p", [1, 2, 5, 10, 15, 20, 25], title="Ablation of input dimension")
+        ablate_param(
+            key,
+            "p",
+            [1, 2, 5, 10, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 30, 35],
+            title="Ablation of input dimension",
+        )
     if args.sweep == "q":
-        ablate_param(key, "q", [1, 2, 5, 10, 15, 20, 25], title="Ablation of output dimension")
+        ablate_param(
+            key, "q", [1, 2, 5, 10, 15, 20, 25], title="Ablation of output dimension"
+        )
     if args.sweep == "rho":
         ablate_param(
             key,
@@ -164,5 +186,8 @@ if __name__ == "__main__":
         )
     if args.sweep == "eps":
         ablate_param(
-            key, "eps", [0.1, 0.2, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0], title="Ablation of noise level"
+            key,
+            "eps",
+            [0.1, 0.2, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0],
+            title="Ablation of noise level",
         )
