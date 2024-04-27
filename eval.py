@@ -162,9 +162,9 @@ def ablate_param(key, name, vals, title=None):
             stderr = jnp.array(stderr)
             nan_mask = jnp.isnan(mean)
             xval = jnp.array(vals)
-            # mean = mean[~nan_mask]
-            # stderr = stderr[~nan_mask]
-            # xval = xval[~nan_mask]
+            mean = mean[~nan_mask]
+            stderr = stderr[~nan_mask]
+            xval = xval[~nan_mask]
             p = plt.plot(xval, mean, alpha=0.7, label=k)
             plt.errorbar(xval, mean, yerr=stderr, capsize=3, fmt="o", color=p[0].get_color(), markersize=3)
 
@@ -205,7 +205,7 @@ if __name__ == "__main__":
         ablate_param(
             key,
             "pq",
-            [15, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 150],
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
             title="Input/output dimension",
         )
     if args.sweep == "n":
@@ -219,13 +219,13 @@ if __name__ == "__main__":
         ablate_param(
             key,
             "p",
-            [15, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 150],
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
             title="Input dimension",
         )
     if args.sweep == "q":
         ablate_param(
             key, "q",
-            [15, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 150],
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
             title="Output dimension"
         )
     if args.sweep == "rho":
