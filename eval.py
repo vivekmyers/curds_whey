@@ -161,11 +161,12 @@ def ablate_param(key, name, vals, title=None):
             mean = jnp.array(mean)
             stderr = jnp.array(stderr)
             nan_mask = jnp.isnan(mean)
-            vals = jnp.array(vals)
-            mean = mean[~nan_mask]
-            stderr = stderr[~nan_mask]
-            p = plt.plot(vals, mean, alpha=0.7, label=k)
-            plt.errorbar(vals, mean, yerr=stderr, capsize=3, fmt="o", color=p[0].get_color(), markersize=3)
+            xval = jnp.array(vals)
+            # mean = mean[~nan_mask]
+            # stderr = stderr[~nan_mask]
+            # xval = xval[~nan_mask]
+            p = plt.plot(xval, mean, alpha=0.7, label=k)
+            plt.errorbar(xval, mean, yerr=stderr, capsize=3, fmt="o", color=p[0].get_color(), markersize=3)
 
         plt.yscale("log")
         plt.xlabel(format_key(name))
@@ -187,7 +188,7 @@ if __name__ == "__main__":
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--p", type=int, default=20)
     parser.add_argument("--q", type=int, default=20)
-    parser.add_argument("--trials", type=int, default=500)
+    parser.add_argument("--trials", type=int, default=50)
     parser.add_argument("--rho", type=float, default=0.3)
     parser.add_argument("--eps", type=float, default=5.0)
     # parser.add_argument('--shift', type=float, default=5.0)
@@ -204,7 +205,7 @@ if __name__ == "__main__":
         ablate_param(
             key,
             "pq",
-            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
+            [15, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 150],
             title="Input/output dimension",
         )
     if args.sweep == "n":
@@ -218,13 +219,13 @@ if __name__ == "__main__":
         ablate_param(
             key,
             "p",
-            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
+            [15, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 150],
             title="Input dimension",
         )
     if args.sweep == "q":
         ablate_param(
             key, "q",
-            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
+            [15, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 150],
             title="Output dimension"
         )
     if args.sweep == "rho":
