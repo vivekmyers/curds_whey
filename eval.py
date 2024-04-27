@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import collections
 import argparse
 import re
+import pickle
 
 
 @functools.partial(jax.jit, static_argnames=["p", "q"])
@@ -120,50 +121,55 @@ def ablate_param(key, name, vals, title=None):
         "fixed": args.fixed,
     }
 
-    for val in tqdm.tqdm(vals):
-        kwargs = config.copy()
-        if name == "pq":
-            kwargs["p"] = val
-            kwargs["q"] = val
-        else:
-            kwargs[name] = val
-
-        if args.curds_only:
-            kwargs.pop("eps")
-
-            def run_eps(eps):
-                results[f"Curds GCV ($\\epsilon={eps}$)"].append(evaluate(key, models.curds_gcv_cca_full_nonorm, eps=eps, **kwargs))
-
-            for eps in [0.1, 0.2, 0.5, 1.0, 2.0, 5.0]:
-                run_eps(eps)
-
-
-        else:
-            results["Ridge 0.01"].append(evaluate(key, models.ridge, lam=0.01, **kwargs))
-            results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **kwargs))
-            results["OLS"].append(evaluate(key, models.ols, **kwargs))
-            results["Curds"].append(evaluate(key, models.curds_nocv_cca_full_nonorm, **kwargs))
-            results["Curds GCV"].append(evaluate(key, models.curds_gcv_cca_full_nonorm, **kwargs))
-
-    for k, data in results.items():
-        mean, stderr = zip(*data)
-        p = plt.plot(vals, mean, alpha=0.7, label=k)
-        plt.errorbar(vals, mean, yerr=stderr, capsize=5, fmt="o", color=p[0].get_color())
-
-    plt.yscale("log")
-    plt.xlabel(format_key(name))
-    plt.ylabel("MSE")
-    plt.legend()
-    title = title or f"Ablate {name}"
-    title += f" {config_desc(config, name)}"
-    plt.title(title)
     target = f"ablation_{name}"
     if args.fixed:
         target += "_fixed"
     if args.suffix:
         target += f"_{args.suffix}"
-    plt.tight_layout()
-    plt.savefig(f"{target}.png", dpi=300)
+
+    if not args.nocompute:
+        for val in tqdm.tqdm(vals):
+            kwargs = config.copy()
+            if name == "pq":
+                kwargs["p"] = val
+                kwargs["q"] = val
+            else:
+                kwargs[name] = val
+
+            if args.curds_only:
+                kwargs.pop("eps")
+
+                def run_eps(eps):
+                    results[f"Curds GCV ($\\epsilon={eps}$)"].append(evaluate(key, models.curds_gcv_cca_full_nonorm, eps=eps, **kwargs))
+
+                for eps in [0.1, 0.2, 0.5, 1.0, 2.0, 5.0]:
+                    run_eps(eps)
+
+
+            else:
+                results["Ridge 0.01"].append(evaluate(key, models.ridge, lam=0.01, **kwargs))
+                results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **kwargs))
+                results["OLS"].append(evaluate(key, models.ols, **kwargs))
+                results["Curds"].append(evaluate(key, models.curds_nocv_cca_full_nonorm, **kwargs))
+                results["Curds GCV"].append(evaluate(key, models.curds_gcv_cca_full_nonorm, **kwargs))
+        pickle.dump(results, open(f"{target}.pkl", "wb"))
+
+    if not args.noplot:
+        results = pickle.load(open(f"{target}.pkl", "rb"))
+        for k, data in results.items():
+            mean, stderr = zip(*data)
+            p = plt.plot(vals, mean, alpha=0.7, label=k)
+            plt.errorbar(vals, mean, yerr=stderr, capsize=3, fmt="o", color=p[0].get_color(), markersize=3)
+
+        plt.yscale("log")
+        plt.xlabel(format_key(name))
+        plt.ylabel("MSE")
+        plt.legend()
+        title = title or f"Ablate {name}"
+        title += f" {config_desc(config, name)}"
+        plt.title(title)
+        plt.tight_layout()
+        plt.savefig(f"{target}.png", dpi=300)
 
 
 
@@ -182,6 +188,8 @@ if __name__ == "__main__":
     parser.add_argument("--beta_noise", type=float, default=0.2)
     parser.add_argument('--suffix', type=str, default=None)
     parser.add_argument('--curds_only', action='store_true')
+    parser.add_argument('--nocompute', action='store_true')
+    parser.add_argument('--noplot', action='store_true')
     args = parser.parse_args()
     key = jax.random.key(args.seed)
 
@@ -190,7 +198,7 @@ if __name__ == "__main__":
         ablate_param(
             key,
             "pq",
-            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 110, 120, 130, 140, 150],
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
             title="Input/output dimension",
         )
     if args.sweep == "n":
@@ -204,13 +212,13 @@ if __name__ == "__main__":
         ablate_param(
             key,
             "p",
-            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 110, 120, 130, 140, 150],
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
             title="Input dimension",
         )
     if args.sweep == "q":
         ablate_param(
             key, "q",
-            [1, 2, 5, 10, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 30, 35, 50, 60, 80, 100, 150],
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
             title="Output dimension"
         )
     if args.sweep == "rho":
