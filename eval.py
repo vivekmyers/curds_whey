@@ -158,6 +158,12 @@ def ablate_param(key, name, vals, title=None):
         results = pickle.load(open(f"{target}.pkl", "rb"))
         for k, data in results.items():
             mean, stderr = zip(*data)
+            mean = jnp.array(mean)
+            stderr = jnp.array(stderr)
+            nan_mask = jnp.isnan(mean)
+            vals = jnp.array(vals)
+            mean = mean[~nan_mask]
+            stderr = stderr[~nan_mask]
             p = plt.plot(vals, mean, alpha=0.7, label=k)
             plt.errorbar(vals, mean, yerr=stderr, capsize=3, fmt="o", color=p[0].get_color(), markersize=3)
 

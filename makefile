@@ -17,3 +17,4 @@ ablation_%.png: ablation_%.pkl
 clean:
 	rm -f ablation_*.png ablation_*.pkl
 
+.SECONDARY:
