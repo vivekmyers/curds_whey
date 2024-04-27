@@ -1,24 +1,17 @@
 import jax
 import jax.numpy as jnp
 import models
-import tqdm
 import functools
 import matplotlib.pyplot as plt
 import collections
 import argparse
-import re
 import pickle
+import joblib
 
 
 @functools.partial(jax.jit, static_argnames=["p", "q"])
 def sample_beta(key, p, q, rho):
-    rng1, rng2, rng3, rng4 = jax.random.split(key, 4)
-    beta = (
-        args.beta_noise * jax.random.normal(rng1, (p, q))
-        + jax.random.normal(rng2, (1, q))
-        + jax.random.normal(rng3, (1, 1))
-        + jax.random.normal(rng4, (p, 1))
-    )
+    beta = args.beta_noise * jax.random.normal(key, (p, q))
     return beta
 
 
@@ -128,7 +121,7 @@ def ablate_param(key, name, vals, title=None):
         target += f"_{args.suffix}"
 
     if not args.nocompute:
-        for val in tqdm.tqdm(vals):
+        def trial(val):
             kwargs = config.copy()
             if name == "pq":
                 kwargs["p"] = val
@@ -136,35 +129,36 @@ def ablate_param(key, name, vals, title=None):
             else:
                 kwargs[name] = val
 
+            results = {}
             if args.curds_only:
                 kwargs.pop("eps")
 
                 def run_eps(eps):
-                    results[f"Curds GCV ($\\epsilon={eps}$)"].append(evaluate(key, models.curds_gcv_cca_full_nonorm, eps=eps, **kwargs))
+                    results[f"Curds GCV ($\\epsilon={eps}$)"] = evaluate(key, models.curds_gcv_cca_full_nonorm, eps=eps, **kwargs)
 
                 for eps in [0.1, 0.2, 0.5, 1.0, 2.0, 5.0]:
                     run_eps(eps)
 
-
             else:
-                results["Ridge 0.01"].append(evaluate(key, models.ridge, lam=0.01, **kwargs))
-                results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **kwargs))
-                results["OLS"].append(evaluate(key, models.ols, **kwargs))
-                results["Curds"].append(evaluate(key, models.curds_nocv_cca_full_nonorm, **kwargs))
-                results["Curds GCV"].append(evaluate(key, models.curds_gcv_cca_full_nonorm, **kwargs))
+                results["Ridge 0.01"] = evaluate(key, models.ridge, lam=0.01, **kwargs)
+                results["Ridge 0.1"] = evaluate(key, models.ridge, lam=0.1, **kwargs)
+                results["OLS"] = evaluate(key, models.ols, **kwargs)
+                results["Curds"] = evaluate(key, models.curds_nocv_cca_full_nonorm, **kwargs)
+                results["Curds GCV"] = evaluate(key, models.curds_gcv_cca_full_nonorm, **kwargs)
+            return results
+        results = joblib.Parallel(n_jobs=-1, verbose=10, backend="loky")(joblib.delayed(trial)(val) for val in vals)
+        results = jax.tree_map(lambda *x: jnp.stack(x), *results)
         pickle.dump(results, open(f"{target}.pkl", "wb"))
 
     if not args.noplot:
         results = pickle.load(open(f"{target}.pkl", "rb"))
         for k, data in results.items():
-            mean, stderr = zip(*data)
-            mean = jnp.array(mean)
-            stderr = jnp.array(stderr)
-            nan_mask = jnp.isnan(mean)
+            mean, stderr = data
+            drop = jnp.isnan(mean) | (mean > 1e5)
             xval = jnp.array(vals)
-            mean = mean[~nan_mask]
-            stderr = stderr[~nan_mask]
-            xval = xval[~nan_mask]
+            mean = mean[~drop]
+            stderr = stderr[~drop]
+            xval = xval[~drop]
             p = plt.plot(xval, mean, alpha=0.7, label=k)
             plt.errorbar(xval, mean, yerr=stderr, capsize=3, fmt="o", color=p[0].get_color(), markersize=3)
 
@@ -188,10 +182,9 @@ if __name__ == "__main__":
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--p", type=int, default=20)
     parser.add_argument("--q", type=int, default=20)
-    parser.add_argument("--trials", type=int, default=50)
     parser.add_argument("--rho", type=float, default=0.3)
+    parser.add_argument("--trials", type=int, default=1000)
     parser.add_argument("--eps", type=float, default=5.0)
-    # parser.add_argument('--shift', type=float, default=5.0)
     parser.add_argument("--beta_noise", type=float, default=0.2)
     parser.add_argument('--suffix', type=str, default=None)
     parser.add_argument('--curds_only', action='store_true')
@@ -205,27 +198,27 @@ if __name__ == "__main__":
         ablate_param(
             key,
             "pq",
-            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 110, 120, 130, 140, 150],
             title="Input/output dimension",
         )
     if args.sweep == "n":
         ablate_param(
             key,
             "n",
-            [5, 10, 15, 20, 25, 50, 100, 150, 200],
+            [5, 10, 13, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 27, 30, 35, 40, 50, 75, 100, 150, 200],
             title="Dataset size",
         )
     if args.sweep == "p":
         ablate_param(
             key,
             "p",
-            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 110, 120, 130, 140, 150],
             title="Input dimension",
         )
     if args.sweep == "q":
         ablate_param(
             key, "q",
-            [1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
+            [1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 98, 100, 102, 105, 110, 120, 130, 140, 150],
             title="Output dimension"
         )
     if args.sweep == "rho":

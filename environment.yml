@@ -8,5 +8,6 @@ dependencies:
   - scikit-learn=1.4
   - matplotlib=3.8
   - jax=0.4.25
+  - joblib=1.4.0
   - seaborn
   - tqdm
