@@ -76,6 +76,33 @@ def evaluate(key, model, n, p, q, trials, rho, eps, fixed, **kwargs):
     stderr = jnp.std(results) / jnp.sqrt(trials)
     return jnp.mean(results), stderr
 
+def config_desc(config, sweep):
+    desc = []
+    for k, v in config.items():
+        if k == sweep:
+            continue
+        if sweep == "pq" and k in ["p", "q"]:
+            continue
+        if k == "eps":
+            desc.append(f"$\\epsilon={v}$")
+        elif k == "rho":
+            desc.append(f"$\\rho={v}$")
+        elif k in ["n", "p", "q"]:
+            desc.append(f"${k}={v}$")
+    desc.append(f"$\\beta_0={args.beta_noise}$")
+    parsed = f'({", ".join(desc)})'
+    return parsed
+
+def format_key(key):
+    if key == "pq":
+        return "$p = q$"
+    if key in ["n", "p", "q"]:
+        return f"${key}$"
+    if key == "rho":
+        return f"$\\rho$"
+    if key == "eps":
+        return f"$\\epsilon$"
+    return key
 
 def ablate_param(key, name, vals, title=None):
     plt.figure(figsize=(7, 4))
@@ -95,50 +122,49 @@ def ablate_param(key, name, vals, title=None):
 
     for val in tqdm.tqdm(vals):
         kwargs = config.copy()
-        kwargs[name] = val
+        if name == "pq":
+            kwargs["p"] = val
+            kwargs["q"] = val
+        else:
+            kwargs[name] = val
 
-        # results["Ridge"].append(evaluate(key, models.ridge, **kwargs))
-        # results["Centered Ridge"].append(evaluate(key, models.ridge_norm, **kwargs))
-        results["Ridge 0.01"].append(evaluate(key, models.ridge, lam=0.01, **kwargs))
-        results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **kwargs))
-        # results["Ridge 1.0"].append(evaluate(key, models.ridge, lam=1.0, **kwargs))
-        # results["Ridge 10"].append(evaluate(key, models.ridge, lam=10, **kwargs))
+        if args.curds_only:
+            kwargs.pop("eps")
 
-        results["OLS"].append(evaluate(key, models.ols, **kwargs))
+            def run_eps(eps):
+                results[f"Curds GCV ($\\epsilon={eps}$)"].append(evaluate(key, models.curds_gcv_cca_full_nonorm, eps=eps, **kwargs))
 
-        # results["Curds cca_full"].append(evaluate(key, models.curds_nocv_cca_full, **kwargs))
-        # results["Curds cca_eig"].append(evaluate(key, models.curds_nocv_cca_eig, **kwargs))
-        # results["Curds gcv"].append(evaluate(key, models.curds_gcv_cca_full, **kwargs))
-        # results["Curds cca_eig"].append(evaluate(key, models.curds_nocv_cca_eig, **kwargs))
-        results["Curds cca_full no norm"].append(
-            evaluate(key, models.curds_nocv_cca_full_nonorm, **kwargs)
-        )
-        results["Curds gcv no norm"].append(
-            evaluate(key, models.curds_gcv_cca_full_nonorm, **kwargs)
-        )
+            for eps in [0.1, 0.2, 0.5, 1.0, 2.0, 5.0]:
+                run_eps(eps)
+
+
+        else:
+            results["Ridge 0.01"].append(evaluate(key, models.ridge, lam=0.01, **kwargs))
+            results["Ridge 0.1"].append(evaluate(key, models.ridge, lam=0.1, **kwargs))
+            results["OLS"].append(evaluate(key, models.ols, **kwargs))
+            results["Curds"].append(evaluate(key, models.curds_nocv_cca_full_nonorm, **kwargs))
+            results["Curds GCV"].append(evaluate(key, models.curds_gcv_cca_full_nonorm, **kwargs))
 
     for k, data in results.items():
         mean, stderr = zip(*data)
-        p = plt.plot(vals, mean, label=k, alpha=0.5)
-        plt.errorbar(
-            vals, mean, yerr=stderr, capsize=5, fmt="o", color=p[0].get_color()
-        )
+        p = plt.plot(vals, mean, alpha=0.7, label=k)
+        plt.errorbar(vals, mean, yerr=stderr, capsize=5, fmt="o", color=p[0].get_color())
 
     plt.yscale("log")
-    plt.xlabel(name)
+    plt.xlabel(format_key(name))
     plt.ylabel("MSE")
     plt.legend()
     title = title or f"Ablate {name}"
-    title += f" $(\\epsilon={args.eps},n={args.n},p={args.p},q={args.q},\\rho={args.rho})$"
-    title = re.sub(f"{name}=[^,]+,", "", title)
-    # title += f" ({args.beta} model)"
+    title += f" {config_desc(config, name)}"
     plt.title(title)
     target = f"ablation_{name}"
     if args.fixed:
         target += "_fixed"
     if args.suffix:
         target += f"_{args.suffix}"
+    plt.tight_layout()
     plt.savefig(f"{target}.png", dpi=300)
+
 
 
 if __name__ == "__main__":
@@ -146,8 +172,8 @@ if __name__ == "__main__":
     parser.add_argument("--sweep", type=str, default="n")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--fixed", action="store_true")
-    parser.add_argument("--n", type=int, default=20)
-    parser.add_argument("--p", type=int, default=10)
+    parser.add_argument("--n", type=int, default=100)
+    parser.add_argument("--p", type=int, default=20)
     parser.add_argument("--q", type=int, default=20)
     parser.add_argument("--trials", type=int, default=500)
     parser.add_argument("--rho", type=float, default=0.3)
@@ -155,39 +181,49 @@ if __name__ == "__main__":
     # parser.add_argument('--shift', type=float, default=5.0)
     parser.add_argument("--beta_noise", type=float, default=0.2)
     parser.add_argument('--suffix', type=str, default=None)
+    parser.add_argument('--curds_only', action='store_true')
     args = parser.parse_args()
     key = jax.random.key(args.seed)
 
     # ablate_param(key, "lam", [0.] + list(jnp.exp(jnp.linspace(-5, 0, 100))), title="Ablation of lambda")
+    if args.sweep == "pq":
+        ablate_param(
+            key,
+            "pq",
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 110, 120, 130, 140, 150],
+            title="Input/output dimension",
+        )
     if args.sweep == "n":
         ablate_param(
             key,
             "n",
             [5, 10, 15, 20, 25, 50, 100, 150, 200],
-            title="Ablation of dataset size",
+            title="Dataset size",
         )
     if args.sweep == "p":
         ablate_param(
             key,
             "p",
-            [1, 2, 5, 10, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 30, 35],
-            title="Ablation of input dimension",
+            [10, 20, 30, 40, 50, 60, 70, 75, 80, 85, 90, 92, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 110, 120, 130, 140, 150],
+            title="Input dimension",
         )
     if args.sweep == "q":
         ablate_param(
-            key, "q", [1, 2, 5, 10, 15, 20, 25], title="Ablation of output dimension"
+            key, "q",
+            [1, 2, 5, 10, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 30, 35, 50, 60, 80, 100, 150],
+            title="Output dimension"
         )
     if args.sweep == "rho":
         ablate_param(
             key,
             "rho",
             [0.0, 0.2, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9],
-            title="Ablation of parameter correlations",
+            title="Predictor covariance",
         )
     if args.sweep == "eps":
         ablate_param(
             key,
             "eps",
             [0.1, 0.2, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0],
-            title="Ablation of noise level",
+            title="Noise level",
         )
