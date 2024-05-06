@@ -154,7 +154,7 @@ def ablate_param(key, name, vals, title=None):
         results = pickle.load(open(f"{target}.pkl", "rb"))
         for k, data in results.items():
             mean, stderr = data
-            drop = jnp.isnan(mean) | (mean > 1e5)
+            drop = jnp.isnan(mean) 
             xval = jnp.array(vals)
             mean = mean[~drop]
             stderr = stderr[~drop]
@@ -163,6 +163,8 @@ def ablate_param(key, name, vals, title=None):
             plt.errorbar(xval, mean, yerr=stderr, capsize=3, fmt="o", color=p[0].get_color(), markersize=3)
 
         plt.yscale("log")
+        ymin, ymax = plt.gca().get_ylim()
+        plt.gca().set_ylim(top=min(ymax, 1e5))
         plt.xlabel(format_key(name))
         plt.ylabel("MSE")
         plt.legend()
