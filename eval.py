@@ -10,8 +10,8 @@ import joblib
 
 
 @functools.partial(jax.jit, static_argnames=["p", "q"])
-def sample_beta(key, p, q, rho):
-    beta = args.beta_noise * jax.random.normal(key, (p, q))
+def sample_beta(key, p, q, rho, beta0):
+    beta = beta0 * jax.random.normal(key, (p, q))
     return beta
 
 
@@ -35,7 +35,7 @@ def gen_data_fixed(key, n, p, q, eps, X_fixed, beta_fixed):
 
 
 @functools.partial(jax.jit, static_argnames=["model", "n", "p", "q", "fixed"])
-def eval_trial(key, model, n, p, q, rho, eps, fixed, **kwargs):
+def eval_trial(key, model, n, p, q, rho, eps, beta0, fixed, **kwargs):
     if fixed:
         beta_fixed = kwargs.pop("beta_fixed")
         X_fixed = kwargs.pop("X_fixed")
@@ -46,7 +46,7 @@ def eval_trial(key, model, n, p, q, rho, eps, fixed, **kwargs):
         Yt = gen_data_fixed(rng2, n, p, q, eps, X_fixed, beta_fixed)
     else:
         rng1, rng2, rng3 = jax.random.split(key, 3)
-        beta = sample_beta(rng1, p, q, rho)
+        beta = sample_beta(rng1, p, q, rho, beta0)
         X, Y = gen_data(rng2, n, p, q, rho, beta, eps)
         Xt, Yt = gen_data(rng3, n, p, q, rho, beta, eps)
     Yhat = model(X, Y, Xt, **kwargs)
@@ -54,18 +54,18 @@ def eval_trial(key, model, n, p, q, rho, eps, fixed, **kwargs):
 
 
 @functools.partial(jax.jit, static_argnames=["model", "n", "p", "q", "trials", "fixed"])
-def evaluate(key, model, n, p, q, trials, rho, eps, fixed, **kwargs):
+def evaluate(key, model, n, p, q, trials, rho, eps, beta0, fixed, **kwargs):
 
     key, rng1 = jax.random.split(key)
     if fixed:
-        beta_fixed = sample_beta(rng1, p, q, rho)
+        beta_fixed = sample_beta(rng1, p, q, rho, beta0)
         kwargs["beta_fixed"] = beta_fixed
         key, rng1, rng2 = jax.random.split(key, 3)
         X_fixed, _ = gen_data(rng2, n, p, q, rho, beta_fixed, eps)
         kwargs["X_fixed"] = X_fixed
 
     results = jax.vmap(
-        lambda x: eval_trial(x, model, n, p, q, rho, eps, fixed, **kwargs)
+        lambda x: eval_trial(x, model, n, p, q, rho, eps, beta0, fixed, **kwargs)
     )(jax.random.split(key, trials))
     stderr = jnp.std(results) / jnp.sqrt(trials)
     return jnp.mean(results), stderr
@@ -81,9 +81,10 @@ def config_desc(config, sweep):
             desc.append(f"$\\epsilon={v}$")
         elif k == "rho":
             desc.append(f"$\\rho={v}$")
+        elif k == "beta0":
+            desc.append(f"$\\beta_0={v}$")
         elif k in ["n", "p", "q"]:
             desc.append(f"${k}={v}$")
-    desc.append(f"$\\beta_0={args.beta_noise}$")
     parsed = f'({", ".join(desc)})'
     return parsed
 
@@ -96,6 +97,8 @@ def format_key(key):
         return f"$\\rho$"
     if key == "eps":
         return f"$\\epsilon$"
+    if key == "beta0":
+        return f"$\\beta_0$"
     return key
 
 def ablate_param(key, name, vals, title=None):
@@ -112,6 +115,7 @@ def ablate_param(key, name, vals, title=None):
         "rho": args.rho,
         "eps": args.eps,
         "fixed": args.fixed,
+        "beta0": args.beta0,
     }
 
     target = f"ablation_{name}"
@@ -120,7 +124,7 @@ def ablate_param(key, name, vals, title=None):
     if args.suffix:
         target += f"_{args.suffix}"
 
-    if not args.nocompute:
+    if args.mode in ["compute", "both"]:
         def trial(val):
             kwargs = config.copy()
             if name == "pq":
@@ -131,7 +135,7 @@ def ablate_param(key, name, vals, title=None):
 
             results = {}
             if args.curds_only:
-                kwargs.pop("eps")
+                kwargs = {k: v for k, v in kwargs.items() if k != "eps"}
 
                 def run_eps(eps):
                     results[f"Curds GCV ($\\epsilon={eps}$)"] = evaluate(key, models.curds_gcv_cca_full_nonorm, eps=eps, **kwargs)
@@ -150,7 +154,7 @@ def ablate_param(key, name, vals, title=None):
         results = jax.tree_map(lambda *x: jnp.stack(x), *results)
         pickle.dump(results, open(f"{target}.pkl", "wb"))
 
-    if not args.noplot:
+    if args.mode in ["plot", "both"]:
         results = pickle.load(open(f"{target}.pkl", "rb"))
         for k, data in results.items():
             mean, stderr = data
@@ -187,11 +191,10 @@ if __name__ == "__main__":
     parser.add_argument("--rho", type=float, default=0.3)
     parser.add_argument("--trials", type=int, default=1000)
     parser.add_argument("--eps", type=float, default=5.0)
-    parser.add_argument("--beta_noise", type=float, default=0.2)
+    parser.add_argument("--beta0", type=float, default=0.2)
     parser.add_argument('--suffix', type=str, default=None)
     parser.add_argument('--curds_only', action='store_true')
-    parser.add_argument('--nocompute', action='store_true')
-    parser.add_argument('--noplot', action='store_true')
+    parser.add_argument('--mode', type=str, choices=['both', 'plot', 'compute'], default='both')
     args = parser.parse_args()
     key = jax.random.key(args.seed)
 
@@ -235,5 +238,12 @@ if __name__ == "__main__":
             key,
             "eps",
             [0.1, 0.2, 0.7, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0],
+            title="Noise level",
+        )
+    if args.sweep == "beta0":
+        ablate_param(
+            key,
+            "beta0",
+            jnp.linspace(0., 1.0, 100),
             title="Noise level",
         )
